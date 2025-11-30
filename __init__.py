@@ -4,14 +4,14 @@
 
 # Inspired by: https://github.com/AlansCodeLog/blender-debugger-for-vscode
 
-# Notes: 
+# Notes:
 # * As of 5/3/2022 debugpy provides no methods to stop the server or check if one is
 #   still listening.
 
 bl_info = {
     "name": "Python Debugger",
     "author": "Hextant Studios",
-    "version": (1, 0, 0),
+    "version": (1, 2, 0),
     "blender": (3, 0, 0),
     "location": "Click 'Install debugpy' below. Main Menu / Blender Icon / System / Start Python Debugger",
     "description": "Starts debugpy and listens for connections from a remote debugger such " \
@@ -20,9 +20,16 @@ bl_info = {
     "category": "Development",
 }
 
-import bpy, sys, os, site, subprocess, importlib
+import bpy
+import sys
+import os
+import site
+import subprocess
+import importlib
 from bpy.types import Operator, AddonPreferences
 from bpy.props import IntProperty
+from bpy.app.handlers import persistent
+import traceback
 
 # The global debugpy module (imported when the server is started).
 debugpy = None
@@ -52,13 +59,13 @@ class DebugPythonPreferences(AddonPreferences):
         installed = is_debugpy_installed()
         layout = self.layout
         layout.use_property_split = True
-        
-        if installed: 
+
+        if installed:
             layout.prop(self, 'port')
             layout.operator(UninstallDebugpy.bl_idname)
         else:
-            layout.operator(InstallDebugpy.bl_idname)            
-        
+            layout.operator(InstallDebugpy.bl_idname)
+
 
 #
 # Operators
@@ -84,7 +91,7 @@ class InstallDebugpy(Operator):
             return {'FINISHED'}
         finally:
             context.window.cursor_set('DEFAULT')
-        
+
         # Install 'debugpy' package.
         try:
             context.window.cursor_set('WAIT')
@@ -94,7 +101,7 @@ class InstallDebugpy(Operator):
             return {'FINISHED'}
         finally:
             context.window.cursor_set('DEFAULT')
-        
+
         self.report({'INFO'}, "Successfully installed 'debugpy' package.")
         return {'FINISHED'}
 
@@ -108,7 +115,7 @@ class UninstallDebugpy(Operator):
     def execute(self, context):
         python = os.path.abspath(sys.executable)
         self.report({'INFO'}, "Uninstalling 'debugpy' package.")
-        
+
         # Uninstall 'debugpy' package.
         try:
             context.window.cursor_set('WAIT')
@@ -118,10 +125,11 @@ class UninstallDebugpy(Operator):
             return {'FINISHED'}
         finally:
             context.window.cursor_set('DEFAULT')
-        
+
         self.report({'INFO'}, "Successfully uninstalled 'debugpy' package.")
         return {'FINISHED'}
 
+DEBUGPY_LISTENING = False
 
 # Starts the debug server for Python scripts.
 class StartDebugServer(Operator):
@@ -132,19 +140,20 @@ class StartDebugServer(Operator):
 
     @classmethod
     def poll(cls, context):
+        global DEBUGPY_LISTENING
         return is_debugpy_installed()
 
     def execute(self, context):
         addon_prefs = context.preferences.addons[__package__].preferences
 
         # Import the debugpy package.
-        global debugpy
+        global debugpy, DEBUGPY_LISTENING
         if not debugpy:
             try:
                 sys.path.append(site.getusersitepackages())
                 debugpy = importlib.import_module('debugpy')
             except:
-                self.report({'ERROR'}, "Failed to import debugpy! " + 
+                self.report({'ERROR'}, "Failed to import debugpy! " +
                     "Verify that debugpy has been installed from the add-on's preferences.")
                 return {'FINISHED'}
             finally:
@@ -157,14 +166,59 @@ class StartDebugServer(Operator):
 
         try:
             debugpy.listen(port)
-        except:
-            self.report({'WARNING'}, 
-                f"Remote python debugger failed to start (or already started) on port {port}.")
+            DEBUGPY_LISTENING = True
+            bpy.context.scene["auto_start_debugpy"] = True
+        except Exception as e:
+            print("Exception while starting debugpy:")
+            traceback.print_exc()
+            self.report({'WARNING'},
+                f"Remote python debugger failed to start (or already started) on port {port} : {str(e)}")
             return {'FINISHED'}
 
-        self.report({'INFO'}, f"Remote python debugger started on port {port}.")
+        self.report({'INFO'}, f"Remote python debugger started on port {port}, and this file is set to auto start debug.")
         return {'FINISHED'}
 
+# Stop the debug server for Python scripts.
+class StopDebugServer(Operator):
+    """Stop the remote debug server (debugpy).
+    """
+    bl_idname = "script.stop_debug_server"
+    bl_label = "Stop Debug Server"
+
+    @classmethod
+    def poll(cls, context):
+        global DEBUGPY_LISTENING
+        return DEBUGPY_LISTENING
+
+    def execute(self, context):
+        addon_prefs = context.preferences.addons[__package__].preferences
+
+        # Import the debugpy package.
+        global debugpy, DEBUGPY_LISTENING
+        if not debugpy:
+            try:
+                sys.path.append(site.getusersitepackages())
+                debugpy = importlib.import_module('debugpy')
+
+            except:
+                self.report({'ERROR'}, "Failed to import debugpy! " +
+                    "Verify that debugpy has been installed from the add-on's preferences.")
+                return {'FINISHED'}
+            finally:
+                sys.path.remove(site.getusersitepackages())
+
+        try:
+
+            DEBUGPY_LISTENING = False
+            #bpy.context.scene["auto_start_debugpy"] = False
+            bpy.context.scene.remove("auto_start_debugpy")
+        except Exception as e:
+            self.report({'WARNING'},
+                f"Auto start debugger on this file is removed, but we can't stop debugger: {str(e)}")
+            return {'FINISHED'}
+
+        self.report({'INFO'}, "Remote python debugger stopped.")
+        return {'FINISHED'}
 
 #
 # Menu Items
@@ -174,20 +228,37 @@ class StartDebugServer(Operator):
 def start_remote_debugger_menu(self, context):
     self.layout.operator(StartDebugServer.bl_idname, icon='SCRIPT')
 
+def stop_remote_debugger_menu(self, context):
+    self.layout.operator(StopDebugServer.bl_idname, icon='CANCEL')
+
+@persistent
+def debugpy_load_handler(dummy):
+    if bpy.context.scene.get("auto_start_debugpy") and bpy.context.scene["auto_start_debugpy"]:
+        print("Auto start debugpy.")
+        bpy.ops.script.start_debug_server()
+
 #
 # Registration
 #
 
-_classes = (DebugPythonPreferences, InstallDebugpy, UninstallDebugpy, StartDebugServer)
+_classes = (DebugPythonPreferences, InstallDebugpy, UninstallDebugpy, StartDebugServer, StopDebugServer)
 _register, _unregister = bpy.utils.register_classes_factory(_classes)
 
 def register():
     _register()
     # Add a System menu entry to start the server.
+    bpy.types.TOPBAR_MT_blender_system.prepend(stop_remote_debugger_menu)
     bpy.types.TOPBAR_MT_blender_system.prepend(start_remote_debugger_menu)
+
+    bpy.app.handlers.load_post.append(debugpy_load_handler)
 
 def unregister():
     _unregister()
+    bpy.app.handlers.load_post.remove(debugpy_load_handler)
+
     # Remove System menu entry
     bpy.types.TOPBAR_MT_blender_system.remove(start_remote_debugger_menu)
+    bpy.types.TOPBAR_MT_blender_system.remove(stop_remote_debugger_menu)
 
+if __name__ == "__main__":
+    register()
