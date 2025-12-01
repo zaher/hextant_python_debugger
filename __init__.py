@@ -131,6 +131,13 @@ class UninstallDebugpy(Operator):
 
 DEBUGPY_LISTENING = False
 
+def popup(message="", title="Message Box", icon="INFO"):
+    def draw(self, context):
+        self.layout.label(text=message)
+
+    bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
+    return
+
 # Starts the debug server for Python scripts.
 class StartDebugServer(Operator):
     """Starts the remote debug server (debugpy) for Python scripts.
@@ -175,7 +182,7 @@ class StartDebugServer(Operator):
                 f"Remote python debugger failed to start (or already started) on port {port} : {str(e)}")
             return {'FINISHED'}
 
-        self.report({'INFO'}, f"Remote python debugger started on port {port}, and this file is set to auto start debug.")
+        self.report({'INFO'}, f"Remote python debugger started on port {port}.")
         return {'FINISHED'}
 
 
@@ -281,6 +288,7 @@ def debugpy_load_handler(dummy):
     ws = bpy.context.workspace
     if ws.get("auto_start_debugpy") and ws["auto_start_debugpy"]:
         bpy.ops.script.start_debug_server()
+        popup("Remote python debugger auto started.", "Debug debugpy")
 
 #
 # Registration
