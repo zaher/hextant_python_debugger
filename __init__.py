@@ -138,6 +138,10 @@ def popup(message="", title="Message Box", icon="INFO"):
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
     return
 
+def is_blender_debug_mode():
+    """Check if Blender was started with --debug or --debug-all"""
+    return any(arg in sys.argv for arg in ('--debug', '--debug-all'))
+
 # Starts the debug server for Python scripts.
 class StartDebugServer(Operator):
     """Starts the remote debug server (debugpy) for Python scripts.
@@ -286,7 +290,7 @@ def stop_remote_debugger_menu(self, context):
 @persistent
 def debugpy_load_handler(dummy):
     ws = bpy.context.workspace
-    if ws.get("auto_start_debugpy") and ws["auto_start_debugpy"]:
+    if is_blender_debug_mode() or (ws.get("auto_start_debugpy") and ws["auto_start_debugpy"]):
         bpy.ops.script.start_debug_server()
         popup("Remote python debugger auto started.", "Debug debugpy")
 
