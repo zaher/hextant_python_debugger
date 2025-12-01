@@ -53,9 +53,34 @@ To debug your Blender add-on using Visual Studio Code, a few things need to be d
   * This will create and open a `.vscode/launch.json` file in your add-on projects folder.
 
     * Copy and paste the `localRoot` value to the `remoteRoot` and save and close the file:
+
       ```json
       "localRoot": "${workspaceFolder}",
       "remoteRoot": "${workspaceFolder}"
+      ```
+
+      Full example:
+      ```json
+        {
+          "version": "0.2.0",
+          "configurations": [
+            {
+              "name": "Python Debugger: Remote Attach",
+              "type": "python",
+              "request": "attach",
+              "connect": {
+                "host": "localhost",
+                "port": 5678
+              },
+              "pathMappings": [
+                {
+                  "localRoot": "${workspaceFolder}",
+                  "remoteRoot": "${workspaceFolder}"
+                }
+              ]
+            },
+          ]
+        }
       ```
 
 You should now be able to debug your add-on as needed by doing the following:
