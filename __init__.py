@@ -275,8 +275,6 @@ def register():
 
 def unregister():
     _unregister()
-    bpy.app.handlers.load_post.remove(debugpy_load_handler)
-
     # Remove System menu entry
     bpy.types.TOPBAR_MT_blender_system.remove(start_remote_debugger_menu)
 
