@@ -7,6 +7,11 @@
 # Notes:
 # * As of 5/3/2022 debugpy provides no methods to stop the server or check if one is
 #   still listening.
+#
+#  * Added: Button to start in Tool->Workspace sidebar
+#  * Added: Auto start per file by @zaher
+#  * Added: Start debugging by command line --debug by @zaher
+#
 
 bl_info = {
     "name": "Python Debugger",
@@ -189,48 +194,6 @@ class StartDebugServer(Operator):
         self.report({'INFO'}, f"Remote python debugger started on port {port}.")
         return {'FINISHED'}
 
-
-# Stop the debug server for Python scripts.
-class StopDebugServer(Operator):
-    """Stop the remote debug server (debugpy).
-    """
-    bl_idname = "script.stop_debug_server"
-    bl_label = "Stop Debug Server"
-
-    @classmethod
-    def poll(cls, context):
-        global DEBUGPY_LISTENING
-        return DEBUGPY_LISTENING
-
-    def execute(self, context):
-        addon_prefs = context.preferences.addons[__package__].preferences
-
-        # Import the debugpy package.
-        global debugpy, DEBUGPY_LISTENING
-        if not debugpy:
-            try:
-                sys.path.append(site.getusersitepackages())
-                debugpy = importlib.import_module('debugpy')
-
-            except:
-                self.report({'ERROR'}, "Failed to import debugpy! " +
-                    "Verify that debugpy has been installed from the add-on's preferences.")
-                return {'FINISHED'}
-            finally:
-                sys.path.remove(site.getusersitepackages())
-
-        try:
-
-            DEBUGPY_LISTENING = False
-            bpy.context.workspace.remove("auto_start_debugpy")
-        except Exception as e:
-            self.report({'WARNING'},
-                f"Auto start debugger on this file is removed, but we can't stop debugger: {str(e)}")
-            return {'FINISHED'}
-
-        self.report({'INFO'}, "Remote python debugger stopped.")
-        return {'FINISHED'}
-
 class WORKSPACE_OT_toggle_debugpy(bpy.types.Operator):
     bl_idname = "workspace.toggle_debugpy"
     bl_label = "Auto-Start Debugpy"
@@ -284,11 +247,10 @@ class WORKSPACE_PT_DEBUGPY_Panel(bpy.types.Panel):
 def start_remote_debugger_menu(self, context):
     self.layout.operator(StartDebugServer.bl_idname, icon='SCRIPT')
 
-def stop_remote_debugger_menu(self, context):
-    self.layout.operator(StopDebugServer.bl_idname, icon='CANCEL')
-
 @persistent
 def debugpy_load_handler(dummy):
+    if DEBUGPY_LISTENING:
+        return
     ws = bpy.context.workspace
     if is_blender_debug_mode() or (ws.get("auto_start_debugpy") and ws["auto_start_debugpy"]):
         bpy.ops.script.start_debug_server()
@@ -298,8 +260,7 @@ def debugpy_load_handler(dummy):
 # Registration
 #
 
-_classes = (DebugPythonPreferences, InstallDebugpy, UninstallDebugpy,
-            StartDebugServer, #StopDebugServer,
+_classes = (DebugPythonPreferences, InstallDebugpy, UninstallDebugpy, StartDebugServer,
             WORKSPACE_OT_toggle_debugpy, WORKSPACE_PT_DEBUGPY_Panel
     )
 
@@ -308,7 +269,6 @@ _register, _unregister = bpy.utils.register_classes_factory(_classes)
 def register():
     _register()
     # Add a System menu entry to start the server.
-    #bpy.types.TOPBAR_MT_blender_system.prepend(stop_remote_debugger_menu)
     bpy.types.TOPBAR_MT_blender_system.prepend(start_remote_debugger_menu)
 
     bpy.app.handlers.load_post.append(debugpy_load_handler)
@@ -319,7 +279,6 @@ def unregister():
 
     # Remove System menu entry
     bpy.types.TOPBAR_MT_blender_system.remove(start_remote_debugger_menu)
-    #bpy.types.TOPBAR_MT_blender_system.remove(stop_remote_debugger_menu)
 
 if __name__ == "__main__":
     register()

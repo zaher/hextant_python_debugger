@@ -104,7 +104,7 @@ You should now be able to debug your add-on as needed by doing the following:
 
 ## Known Issues
 
-* *None currently.*
+* TODO mark file as modified after add auto-start debugging
 
 ## License
 
