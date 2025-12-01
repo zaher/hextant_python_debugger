@@ -85,6 +85,9 @@ You should now be able to debug your add-on as needed by doing the following:
 
 * From Blender's main menu, click: *{Blender Icon} / System / Start Debug Server*
   * Note that this only needs to be done once per Blender execution. If the menu appears disabled, the `debugpy` package needs to be installed from the add-on's preferences.
+  * Or from sidebar, press `n` then "Tool" tab look at Workspace panel, you will find Debug panel
+  * You can save auto start debug with the file, if you opened that file again debug will start automatically
+
 * From Visual Studio:
   * Click *File / Open / Folder* and open the folder containing your add-on.
   * Click *Debug / Attach to Process* (`Ctrl + Alt + P`)

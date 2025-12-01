@@ -167,7 +167,7 @@ class StartDebugServer(Operator):
         try:
             debugpy.listen(port)
             DEBUGPY_LISTENING = True
-            bpy.context.scene["auto_start_debugpy"] = True
+            #bpy.context.workspace["auto_start_debugpy"] = True
         except Exception as e:
             print("Exception while starting debugpy:")
             traceback.print_exc()
@@ -177,6 +177,7 @@ class StartDebugServer(Operator):
 
         self.report({'INFO'}, f"Remote python debugger started on port {port}, and this file is set to auto start debug.")
         return {'FINISHED'}
+
 
 # Stop the debug server for Python scripts.
 class StopDebugServer(Operator):
@@ -210,8 +211,7 @@ class StopDebugServer(Operator):
         try:
 
             DEBUGPY_LISTENING = False
-            #bpy.context.scene["auto_start_debugpy"] = False
-            bpy.context.scene.remove("auto_start_debugpy")
+            bpy.context.workspace.remove("auto_start_debugpy")
         except Exception as e:
             self.report({'WARNING'},
                 f"Auto start debugger on this file is removed, but we can't stop debugger: {str(e)}")
@@ -219,6 +219,51 @@ class StopDebugServer(Operator):
 
         self.report({'INFO'}, "Remote python debugger stopped.")
         return {'FINISHED'}
+
+class WORKSPACE_OT_toggle_debugpy(bpy.types.Operator):
+    bl_idname = "workspace.toggle_debugpy"
+    bl_label = "Auto-Start Debugpy"
+    bl_description = "Enable or disable auto-starting debugpy in this workspace"
+
+    def execute(self, context):
+        ws = context.workspace
+        current = ws.get("auto_start_debugpy", False)
+        ws["auto_start_debugpy"] = not current
+        if current:
+            del ws["auto_start_debugpy"]
+        ## Force file as modified TODO
+        #bpy.data.is_dirty = True
+
+        self.report({'INFO'}, f"Auto Start debugpy set to {not current}")
+        return {'FINISHED'}
+
+
+class WORKSPACE_PT_DEBUGPY_Panel(bpy.types.Panel):
+    """Python Debuging (debugpy)"""
+    bl_label = "Python Debuging (debugpy)"
+    bl_idname = "WORKSPACE_PT_debugpy"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    #bl_context = "Tool"
+    bl_category = "Tool"
+
+    def draw(self, context):
+        global DEBUGPY_LISTENING
+        ws = bpy.context.workspace
+        layout = self.layout
+
+        obj = context.object
+
+        row = layout.row()
+        row.enabled = not DEBUGPY_LISTENING
+        row.operator(StartDebugServer.bl_idname, icon='SCRIPT')
+
+        row = layout.row()
+        #row.enabled = DEBUGPY_LISTENING
+        if ws.get("auto_start_debugpy") and ws["auto_start_debugpy"]:
+            row.operator("workspace.toggle_debugpy", icon = "CHECKBOX_HLT")
+        else:
+            row.operator("workspace.toggle_debugpy", icon = "CHECKBOX_DEHLT")
 
 #
 # Menu Items
@@ -233,21 +278,25 @@ def stop_remote_debugger_menu(self, context):
 
 @persistent
 def debugpy_load_handler(dummy):
-    if bpy.context.scene.get("auto_start_debugpy") and bpy.context.scene["auto_start_debugpy"]:
-        print("Auto start debugpy.")
+    ws = bpy.context.workspace
+    if ws.get("auto_start_debugpy") and ws["auto_start_debugpy"]:
         bpy.ops.script.start_debug_server()
 
 #
 # Registration
 #
 
-_classes = (DebugPythonPreferences, InstallDebugpy, UninstallDebugpy, StartDebugServer, StopDebugServer)
+_classes = (DebugPythonPreferences, InstallDebugpy, UninstallDebugpy,
+            StartDebugServer, #StopDebugServer,
+            WORKSPACE_OT_toggle_debugpy, WORKSPACE_PT_DEBUGPY_Panel
+    )
+
 _register, _unregister = bpy.utils.register_classes_factory(_classes)
 
 def register():
     _register()
     # Add a System menu entry to start the server.
-    bpy.types.TOPBAR_MT_blender_system.prepend(stop_remote_debugger_menu)
+    #bpy.types.TOPBAR_MT_blender_system.prepend(stop_remote_debugger_menu)
     bpy.types.TOPBAR_MT_blender_system.prepend(start_remote_debugger_menu)
 
     bpy.app.handlers.load_post.append(debugpy_load_handler)
@@ -258,7 +307,7 @@ def unregister():
 
     # Remove System menu entry
     bpy.types.TOPBAR_MT_blender_system.remove(start_remote_debugger_menu)
-    bpy.types.TOPBAR_MT_blender_system.remove(stop_remote_debugger_menu)
+    #bpy.types.TOPBAR_MT_blender_system.remove(stop_remote_debugger_menu)
 
 if __name__ == "__main__":
     register()
